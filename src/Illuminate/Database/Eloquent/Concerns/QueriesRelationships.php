@@ -1037,14 +1037,17 @@ trait QueriesRelationships
      */
     public function mergeConstraintsFrom(Builder $from)
     {
-        $whereBindings = $from->getQuery()->getRawBindings()['where'] ?? [];
+        // todo: more checks?
+        // Requalify the "where" clauses by setting the table alias to match the current
+        // query's table reference.
+        $old = $from->getQuery()->tableReference();
+        $new = $this->getQuery()->tableReference();
+        if ($old !== null && $new !== null && $old !== $new) {
+            $from->as($new);
+        }
 
-        $wheres = $from->getQuery()->from !== $this->getQuery()->from
-            ? $this->requalifyWhereTables(
-                $from->getQuery()->wheres,
-                $from->getQuery()->grammar->getValue($from->getQuery()->from),
-                $this->getModel()->getTable()
-            ) : $from->getQuery()->wheres;
+        $wheres = $from->getQuery()->wheres;
+        $whereBindings = $from->getQuery()->getRawBindings()['where'] ?? [];
 
         // Here we have some other query that we want to merge the where constraints from. We will
         // copy over any where constraints on the query as well as remove any global scopes the
@@ -1054,25 +1057,6 @@ trait QueriesRelationships
         )->mergeWheres(
             $wheres, $whereBindings
         );
-    }
-
-    /**
-     * Updates the table name for any columns with a new qualified name.
-     *
-     * @param  array  $wheres
-     * @param  string  $from
-     * @param  string  $to
-     * @return array
-     */
-    protected function requalifyWhereTables(array $wheres, string $from, string $to): array
-    {
-        return (new BaseCollection($wheres))->map(function ($where) use ($from, $to) {
-            return (new BaseCollection($where))->map(function ($value) use ($from, $to) {
-                return is_string($value) && str_starts_with($value, $from.'.')
-                    ? $to.'.'.Str::afterLast($value, '.')
-                    : $value;
-            });
-        })->toArray();
     }
 
     /**

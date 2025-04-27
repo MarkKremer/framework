@@ -5,6 +5,7 @@ namespace Illuminate\Database\Query\Grammars;
 use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Database\Concerns\CompilesJsonPaths;
 use Illuminate\Database\Grammar as BaseGrammar;
+use Illuminate\Database\Query\Alias;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Database\Query\JoinLateralClause;
@@ -176,7 +177,15 @@ class Grammar extends BaseGrammar
      */
     protected function compileFrom(Builder $query, $table)
     {
-        return 'from '.$this->wrapTable($table);
+        // todo: simplify wrapTable()?
+        $sql = 'from '.$this->wrapTable($table);
+
+        if($query->as !== null) {
+            $sql .= ' as ' . $this->wrapValue($this->connection->getTablePrefix().$query->as->table);
+            // todo: compile aliased columns.
+        }
+
+        return $sql;
     }
 
     /**

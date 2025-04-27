@@ -507,29 +507,6 @@ class Builder implements BuilderContract
     }
 
     /**
-     * Updates the table name for any columns with a new qualified name.
-     *
-     * @param string $from
-     * @param string $to
-     *
-     * @return void
-     */
-    protected function requalifyWhereTables(string $from, string $to): void
-    {
-        if (empty($this->wheres)) {
-            return;
-        }
-
-        $this->wheres = (new Collection($this->wheres))->map(function ($where) use ($from, $to) {
-            return (new Collection($where))->map(function ($value) use ($from, $to) {
-                return is_string($value) && str_starts_with($value, $from . '.')
-                    ? $to . '.' . Str::afterLast($value, '.')
-                    : $value;
-            });
-        })->toArray();
-    }
-
-    /**
      * Add an index hint to suggest a query index.
      *
      * @param  string  $index

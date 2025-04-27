@@ -108,13 +108,6 @@ class Builder implements BuilderContract
     public $from;
 
     /**
-     * The alias for the table targeted in the from clause.
-     *
-     * @var \Illuminate\Database\Query\Alias|null
-     */
-    public $as;
-
-    /**
      * The index hint for the query.
      *
      * @var \Illuminate\Database\Query\IndexHint|null
@@ -490,51 +483,27 @@ class Builder implements BuilderContract
             return $this->fromSub($table, $as);
         }
 
-        // Parse the table string if it contains an alias.
-        if ($as === null && stripos($table, ' as ') !== false) {
-            [$table, $as] = preg_split('/\s+as\s+/i', $table);
-        }
-
-        $this->from = $table;
-
-        if($as !== null) {
-            $this->as($as);
-        }
+        $this->from = $as ? "{$table} as {$as}" : $table;
 
         return $this;
     }
 
     /**
-     * Set the alias for the table.
+     * Get the current qualifier for the table based on "from".
      *
-     * @param string $table
-     * @param array|null $columns
-     *
-     * @return $this
+     * @return string|null
      */
-    public function as($table, $columns = null)
-    {
-        // Requalify where statements if there is a known previous qualifier.
-        if(($oldQualifier = $this->tableReference()) !== null) {
-            $this->requalifyWhereTables($oldQualifier, $table);
-        }
-
-        $this->as = new Alias($table, $columns);
-
-        return $this;
-    }
-
     public function tableReference(): ?string
     {
-        if($this->as) {
-            return $this->as->table;
+        if($this->from instanceof Expression) {
+            return null;
         }
 
-        if(!$this->from instanceof Expression) {
-            return $this->from;
+        if(($aliasPosition = stripos($this->from, ' as ')) !== false) {
+            return substr($this->from, $aliasPosition + strlen(' as '));
         }
 
-        return null;
+        return $this->from;
     }
 
     /**

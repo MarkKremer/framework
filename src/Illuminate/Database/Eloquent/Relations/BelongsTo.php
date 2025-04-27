@@ -253,14 +253,10 @@ class BelongsTo extends Relation
      */
     public function getRelationExistenceQueryForSelfRelation(Builder $query, Builder $parentQuery, $columns = ['*'])
     {
-        $query->select($columns)->from(
-            $query->getModel()->getTable().' as '.$hash = $this->getRelationCountHash()
-        );
+        $table = $query->getQuery()->tableReference();
 
-        $query->getModel()->setTable($hash);
-
-        return $query->whereColumn(
-            $hash.'.'.$this->ownerKey, '=', $this->getQualifiedForeignKeyName()
+        return $query->select($columns)->whereColumn(
+            $table.'.'.$this->ownerKey, '=', $this->getQualifiedForeignKeyName()
         );
     }
 

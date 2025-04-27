@@ -50,15 +50,15 @@ trait QueriesRelationships
             return $this->hasMorph($relation, ['*'], $operator, $count, $boolean, $callback);
         }
 
-        // If we only need to check for the existence of the relation, then we can optimize
-        // the subquery to only run a "where exists" clause instead of this full "count"
-        // clause. This will make these queries run much faster compared with a count.
-        $method = $this->canUseExistsForExistenceCheck($operator, $count)
-            ? 'getRelationExistenceQuery'
-            : 'getRelationExistenceCountQuery';
+        $hasQuery = $relation->getRelated()->newQueryWithoutRelationships();
 
-        $hasQuery = $relation->{$method}(
-            $relation->getRelated()->newQueryWithoutRelationships(), $this
+        // Set the "from" clause on the hasQuery based on the relation. If the relation references
+        // the same table as the parent, we'll set the from using the table directly, otherwise
+        // we'll use the related model's table with a unique hash to avoid table conflicts.
+        $hasQuery->from(
+            $relation->getQuery()->from == $this->getQuery()->from
+                ? $relation->getQuery()->from
+                : $relation->getModel()->getTable(). ' as ' . $relation->getRelationCountHash()
         );
 
         // Next we will call any given callback as an "anonymous" scope so they can get the
@@ -67,6 +67,17 @@ trait QueriesRelationships
         if ($callback) {
             $hasQuery->callScope($callback);
         }
+
+        $hasQuery->mergeConstraintsFrom($relation->getQuery());
+
+        // If we only need to check for the existence of the relation, then we can optimize
+        // the subquery to only run a "where exists" clause instead of this full "count"
+        // clause. This will make these queries run much faster compared with a count.
+        $method = $this->canUseExistsForExistenceCheck($operator, $count)
+            ? 'getRelationExistenceQuery'
+            : 'getRelationExistenceCountQuery';
+
+        $hasQuery = $relation->{$method}($hasQuery, $this);
 
         return $this->addHasWhere(
             $hasQuery, $relation, $operator, $count, $boolean
@@ -1022,8 +1033,6 @@ trait QueriesRelationships
      */
     protected function addHasWhere(Builder $hasQuery, Relation $relation, $operator, $count, $boolean)
     {
-        $hasQuery->mergeConstraintsFrom($relation->getQuery());
-
         return $this->canUseExistsForExistenceCheck($operator, $count)
             ? $this->addWhereExistsQuery($hasQuery->toBase(), $boolean, $operator === '<' && $count === 1)
             : $this->addWhereCountQuery($hasQuery->toBase(), $operator, $count, $boolean);
@@ -1037,17 +1046,14 @@ trait QueriesRelationships
      */
     public function mergeConstraintsFrom(Builder $from)
     {
-        // todo: more checks?
-        // Requalify the "where" clauses by setting the table alias to match the current
-        // query's table reference.
-        $old = $from->getQuery()->tableReference();
-        $new = $this->getQuery()->tableReference();
-        if ($old !== null && $new !== null && $old !== $new) {
-            $from->as($new);
-        }
-
-        $wheres = $from->getQuery()->wheres;
         $whereBindings = $from->getQuery()->getRawBindings()['where'] ?? [];
+
+        $wheres = $from->getQuery()->tableReference() !== $this->getQuery()->tableReference()
+            ? $this->requalifyWhereTables(
+                $from->getQuery()->wheres,
+                $from->getQuery()->grammar->getValue($from->getQuery()->from),
+                $this->getQuery()->tableReference(),
+            ) : $from->getQuery()->wheres;
 
         // Here we have some other query that we want to merge the where constraints from. We will
         // copy over any where constraints on the query as well as remove any global scopes the
@@ -1057,6 +1063,25 @@ trait QueriesRelationships
         )->mergeWheres(
             $wheres, $whereBindings
         );
+    }
+
+    /**
+     * Updates the table name for any columns with a new qualified name.
+     *
+     * @param  array  $wheres
+     * @param  string  $from
+     * @param  string  $to
+     * @return array
+     */
+    protected function requalifyWhereTables(array $wheres, string $from, string $to): array
+    {
+        return (new BaseCollection($wheres))->map(function ($where) use ($from, $to) {
+            return (new BaseCollection($where))->map(function ($value) use ($from, $to) {
+                return is_string($value) && str_starts_with($value, $from.'.')
+                    ? $to.'.'.Str::afterLast($value, '.')
+                    : $value;
+            });
+        })->toArray();
     }
 
     /**

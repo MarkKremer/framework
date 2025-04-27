@@ -551,8 +551,8 @@ class Builder implements BuilderContract
             return;
         }
 
-        $this->wheres = (new BaseCollection($this->wheres))->map(function ($where) use ($from, $to) {
-            return (new BaseCollection($where))->map(function ($value) use ($from, $to) {
+        $this->wheres = (new Collection($this->wheres))->map(function ($where) use ($from, $to) {
+            return (new Collection($where))->map(function ($value) use ($from, $to) {
                 return is_string($value) && str_starts_with($value, $from . '.')
                     ? $to . '.' . Str::afterLast($value, '.')
                     : $value;

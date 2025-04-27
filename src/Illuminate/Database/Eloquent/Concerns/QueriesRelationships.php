@@ -57,8 +57,8 @@ trait QueriesRelationships
         // we'll use the related model's table with a unique hash to avoid table conflicts.
         $hasQuery->from(
             $relation->getQuery()->from == $this->getQuery()->from
-                ? $relation->getQuery()->from
-                : $relation->getModel()->getTable(). ' as ' . $relation->getRelationCountHash()
+                ? $relation->getModel()->getTable(). ' as ' . $relation->getRelationCountHash()
+                : $relation->getQuery()->from
         );
 
         // Next we will call any given callback as an "anonymous" scope so they can get the
